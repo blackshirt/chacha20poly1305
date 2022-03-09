@@ -1,0 +1,10 @@
+# Binaries for programs and plugins
+main
+chacha20
+*.exe
+*.exe~
+*.so
+*.dylib
+*.dll
+docs/
+_docs/
