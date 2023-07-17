@@ -102,11 +102,11 @@ pub fn (mut c Cipher) set_counter(ctr u32) {
 fn encrypt(key []u8, ctr u32, nonce []u8, plaintext []u8) ![]u8 {
 	_ = key[..chacha20.key_size]
 	if nonce.len == chacha20.x_nonce_size {
-		ciphertext := encrypt_extended(key, ctr, nonce, plaintext)?
+		ciphertext := encrypt_extended(key, ctr, nonce, plaintext)!
 		return ciphertext
 	}
 	if nonce.len == chacha20.nonce_size {
-		ciphertext := encrypt_generic(key, ctr, nonce, plaintext)?
+		ciphertext := encrypt_generic(key, ctr, nonce, plaintext)!
 		return ciphertext
 	}
 	return error('Wrong nonce size : ${nonce.len}')
@@ -125,12 +125,12 @@ pub fn otk_key_gen(key []u8, nonce []u8) ![]u8 {
 	if nonce.len == chacha20.x_nonce_size {
 		mut cnonce := nonce[16..].clone()
 		subkey := hchacha20(key, nonce[0..16])
-		cnonce.prepend([byte(0x00), 0x00, 0x00, 0x00])
-		block := block_generic(subkey, counter, cnonce)?
+		cnonce.prepend([u8(0x00), 0x00, 0x00, 0x00])
+		block := block_generic(subkey, counter, cnonce)!
 		return block[0..32]
 	}
 	if nonce.len == chacha20.nonce_size {
-		block := block_generic(key, counter, nonce)?
+		block := block_generic(key, counter, nonce)!
 		return block[0..32]
 	}
 	return error('wrong nonce size')
@@ -201,7 +201,7 @@ fn initialize_state(key []u8, counter u32, nonce []u8) ![]u32 {
 // The output is 64 random-looking bytes.
 fn block_generic(key []u8, counter u32, nonce []u8) ![]u8 {
 	// setup chacha state, checking was done on initialization step
-	mut cs := initialize_state(key, counter, nonce)?
+	mut cs := initialize_state(key, counter, nonce)!
 
 	// copy of state
 	initial_state := cs[..cs.len].clone()
@@ -274,7 +274,7 @@ fn decrypt_generic(key []u8, counter u32, nonce []u8, ciphertext []u8) ![]u8 {
 	mut decrypted_message := []u8{}
 
 	for i := 0; i < ciphertext.len / chacha20.block_size; i++ {
-		key_stream := block_generic(key, counter + u32(i), nonce)?
+		key_stream := block_generic(key, counter + u32(i), nonce)!
 		block := ciphertext[i * chacha20.block_size..(i + 1) * chacha20.block_size]
 
 		mut dst := []u8{len: block.len}
@@ -287,7 +287,7 @@ fn decrypt_generic(key []u8, counter u32, nonce []u8, ciphertext []u8) ![]u8 {
 	}
 	if ciphertext.len % chacha20.block_size != 0 {
 		j := ciphertext.len / chacha20.block_size
-		key_stream := block_generic(key, counter + u32(j), nonce)?
+		key_stream := block_generic(key, counter + u32(j), nonce)!
 		block := ciphertext[j * chacha20.block_size..]
 
 		mut dst := []u8{len: block.len}
