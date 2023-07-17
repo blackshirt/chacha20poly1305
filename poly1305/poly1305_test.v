@@ -4,13 +4,13 @@ import encoding.hex
 
 // This is a test case from RFC 8439 vector test data.
 // There are 12 cases provided.
-fn test_poly1305_core_vector_tests() ? {
+fn test_poly1305_core_vector_tests() ! {
 	for i, c in poly1305.basic_poly_cases {
 		mut key := hex.decode(c.key) or { panic(err.msg()) }
 		mut msg := hex.decode(c.msg) or { panic(err.msg()) }
 		expected_tag := hex.decode(c.tag) or { panic(err.msg()) }
 
-		mut poly := new_poly1305(key)?
+		mut poly := new_poly1305(key)!
 		poly.input(msg)
 		tag := poly.result()
 		// poly.input(msg) // this could should lead to panic, becaus `.result()` setup done to true
@@ -26,13 +26,13 @@ fn test_poly1305_core_vector_tests() ? {
 }
 
 // its comes from golang poly1305 bvector test, except minus with changed internal state test
-fn test_smoked_data_vectors() ? {
+fn test_smoked_data_vectors() ! {
 	for i, c in test_data {
 		mut key := hex.decode(c.key) or { panic(err.msg()) }
 		mut msg := hex.decode(c.msg) or { panic(err.msg()) }
 		expected_tag := hex.decode(c.tag) or { panic(err.msg()) }
 
-		mut poly := new_poly1305(key)?
+		mut poly := new_poly1305(key)!
 		// mut tag := []byte{len: tag_size}
 
 		poly.input(msg)
@@ -106,7 +106,7 @@ const (
 		},
 		// Test Vector #5: If one uses 130-bit partial reduction, does the code
 		// handle the case where partially reduced final result is not fully
-		// reduced?
+		// reduced!
 		// r := '02000000000000000000000000000000'
 		// s := '00000000000000000000000000000000'
 		// data := 'FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF'
@@ -117,7 +117,7 @@ const (
 			msg: 'FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF'
 			tag: '03000000000000000000000000000000'
 		},
-		// Test Vector #6: What happens if addition of s overflows modulo 2^128?
+		// Test Vector #6: What happens if addition of s overflows modulo 2^128!
 		// r := '02000000000000000000000000000000'
 		// s := 'FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF'
 		// data := '02000000000000000000000000000000'
@@ -129,7 +129,7 @@ const (
 			tag: '03000000000000000000000000000000'
 		},
 		// Test Vector #7: What happens if data limb is all ones and there is
-		// carry from lower limb?
+		// carry from lower limb!
 		// r := '01000000000000000000000000000000'
 		// s := '00000000000000000000000000000000'
 		// data := 'FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF11000000000000000000000000000000'
@@ -140,7 +140,7 @@ const (
 			tag: '05000000000000000000000000000000'
 		},
 		// Test Vector #8: What happens if final result from polynomial part is
-		// exactly 2^130-5?
+		// exactly 2^130-5!
 		// r := '01000000000000000000000000000000'
 		// s := '00000000000000000000000000000000'
 		// data := 'FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFBFEFEFEFEFEFEFEFEFEFEFEFEFEFEFE01010101010101010101010101010101'
@@ -151,7 +151,7 @@ const (
 			tag: '00000000000000000000000000000000'
 		},
 		// Test Vector #9: What happens if final result from polynomial part is
-		//  exactly 2^130-6?
+		//  exactly 2^130-6!
 		// r := '02000000000000000000000000000000'
 		// s := '00000000000000000000000000000000'
 		// data := 'FDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF'
@@ -162,7 +162,7 @@ const (
 			tag: 'FAFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF'
 		},
 		// Test Vector #10: What happens if 5*H+L-type reduction produces
-		//  131-bit intermediate result?
+		//  131-bit intermediate result!
 		// r := '01000000000000000400000000000000'
 		// s := '00000000000000000000000000000000'
 		// data := 'E33594D7505E43B900000000000000003394D7505E4379CD01000000000000000000000000000000000000000000000001000000000000000000000000000000'
@@ -173,7 +173,7 @@ const (
 			tag: '14000000000000005500000000000000'
 		},
 		// Test Vector #11: What happens if 5*H+L-type reduction produces
-		//   131-bit final result?
+		//   131-bit final result!
 		// r := '01000000000000000400000000000000'
 		// s := '00000000000000000000000000000000'
 		// data := 'E33594D7505E43B900000000000000003394D7505E4379CD010000000000000000000000000000000000000000000000'

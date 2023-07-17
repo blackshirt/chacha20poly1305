@@ -97,8 +97,7 @@ fn aead_encrypt(plaintext []u8, key []u8, nonce []u8, aad []u8) !([]u8, []u8) {
 	// First, a Poly1305 one-time key is generated from the 256-bit key
 
 	// and nonce
-	otk := chacha20.otk_key_gen(key, nonce) ?
-
+	otk := chacha20.otk_key_gen(key, nonce)!
 
 	// Next, the ChaCha20 encryption function is called to encrypt the
 	//  plaintext, using the same key and nonce, and with the initial
