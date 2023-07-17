@@ -36,7 +36,7 @@ mut:
 // return the 16-byte result. The key must be unique for each message, authenticating two
 // different messages with the same key allows an attacker to forge messages at will.
 pub fn new_tag(msg []u8, key []u8) []u8 {
-	mut p := new_poly1305(key) or { panic(err.msg()) }
+	mut p := new_poly1305(key) or { panic(err.msg) }
 	p.input(msg)
 	tag := p.result()
 	return tag
@@ -45,7 +45,7 @@ pub fn new_tag(msg []u8, key []u8) []u8 {
 // verify verifies mac is a valid authenticator for msg with the given key.
 // its return true when mac is valid, and false otherwise.
 pub fn verify(mac []u8, msg []u8, key []u8) bool {
-	mut p := new_poly1305(key) or { panic(err.msg()) }
+	mut p := new_poly1305(key) or { panic(err.msg) }
 	p.input(msg)
 	tag := p.result()
 	return subtle.constant_time_compare(mac, tag) == 1
@@ -54,7 +54,7 @@ pub fn verify(mac []u8, msg []u8, key []u8) bool {
 // new_poly1305 create new Poly1305 MAC instances and initializes it with the given key.
 // Poly1305 MAC cannot be used like common hash, because using a poly1305 key twice breaks its security.
 // Therefore feeding data to input to a running MAC after calling result causes it to panic.
-pub fn new_poly1305(key []u8) !Poly1305 {
+pub fn new_poly1305(key []u8) ?Poly1305 {
 	if key.len != poly1305.key_size {
 		return error('wrong key size provided')
 	}

@@ -69,8 +69,10 @@ fn encrypt_extended(key []u8, ctr u32, nonce []u8, plaintext []u8) ![]u8 {
 	}
 	subkey := hchacha20(key, nonce[0..16])
 	mut cnonce := nonce[16..24].clone()
-	cnonce.prepend([u8(0x00), 0x00, 0x00, 0x00])
-	ciphertext := encrypt_generic(subkey, ctr, cnonce, plaintext)!
+
+	cnonce.prepend([byte(0x00), 0x00, 0x00, 0x00])
+	ciphertext := encrypt_generic(subkey, ctr, cnonce, plaintext)?
+
 
 	return ciphertext
 }

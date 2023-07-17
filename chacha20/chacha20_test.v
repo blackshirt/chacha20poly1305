@@ -9,8 +9,9 @@ fn test_onetime_key_gen() ! {
 		key := hex.decode(v.key) or { panic(err.msg()) }
 		nonce := hex.decode(v.nonce) or { panic(err.msg()) }
 
-		otk := hex.decode(v.otk) or { panic(err.msg()) }
-		out := otk_key_gen(key, nonce)!
+		otk := hex.decode(v.otk) or { panic(err.msg) }
+		out := otk_key_gen(key, nonce)?
+
 		assert out == otk
 	}
 }

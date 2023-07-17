@@ -10,8 +10,7 @@ fn test_poly1305_core_vector_tests() ? {
 		mut msg := hex.decode(c.msg) or { panic(err.msg()) }
 		expected_tag := hex.decode(c.tag) or { panic(err.msg()) }
 
-		mut poly := new_poly1305(key)!
-
+		mut poly := new_poly1305(key)?
 		poly.input(msg)
 		tag := poly.result()
 		// poly.input(msg) // this could should lead to panic, becaus `.result()` setup done to true
@@ -33,8 +32,9 @@ fn test_smoked_data_vectors() ? {
 		mut msg := hex.decode(c.msg) or { panic(err.msg()) }
 		expected_tag := hex.decode(c.tag) or { panic(err.msg()) }
 
-		mut poly := new_poly1305(key)!
-		// mut tag := []u8{len: tag_size}
+		mut poly := new_poly1305(key)?
+		// mut tag := []byte{len: tag_size}
+
 		poly.input(msg)
 		mut tag := poly.result()
 
