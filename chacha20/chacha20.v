@@ -102,14 +102,14 @@ pub fn (mut c Cipher) set_counter(ctr u32) {
 fn encrypt(key []byte, ctr u32, nonce []byte, plaintext []byte) ?[]byte {
 	_ = key[..chacha20.key_size]
 	if nonce.len == chacha20.x_nonce_size {
-		ciphertext := encrypt_extended(key, ctr, nonce, plaintext) ?
+		ciphertext := encrypt_extended(key, ctr, nonce, plaintext)?
 		return ciphertext
 	}
 	if nonce.len == chacha20.nonce_size {
-		ciphertext := encrypt_generic(key, ctr, nonce, plaintext) ?
+		ciphertext := encrypt_generic(key, ctr, nonce, plaintext)?
 		return ciphertext
 	}
-	return error('Wrong nonce size : $nonce.len')
+	return error('Wrong nonce size : ${nonce.len}')
 }
 
 // otk_key_gen generates one time key using `chacha20` block function if provided
@@ -126,11 +126,11 @@ pub fn otk_key_gen(key []byte, nonce []byte) ?[]byte {
 		mut cnonce := nonce[16..].clone()
 		subkey := hchacha20(key, nonce[0..16])
 		cnonce.prepend([byte(0x00), 0x00, 0x00, 0x00])
-		block := block_generic(subkey, counter, cnonce) ?
+		block := block_generic(subkey, counter, cnonce)?
 		return block[0..32]
 	}
 	if nonce.len == chacha20.nonce_size {
-		block := block_generic(key, counter, nonce) ?
+		block := block_generic(key, counter, nonce)?
 		return block[0..32]
 	}
 	return error('wrong nonce size')
@@ -166,10 +166,10 @@ fn quarter_round(a u32, b u32, c u32, d u32) (u32, u32, u32, u32) {
 // initialize_state initializes ChaCha20 state, represented as array of [16]u32
 fn initialize_state(key []byte, counter u32, nonce []byte) ?[]u32 {
 	if key.len != chacha20.key_size {
-		return error('ChaCha20: wrong key size provided=$key.len')
+		return error('ChaCha20: wrong key size provided=${key.len}')
 	}
 	if nonce.len != chacha20.nonce_size {
-		return error('ChaCha20: wrong nonce size provided=$nonce.len')
+		return error('ChaCha20: wrong nonce size provided=${nonce.len}')
 	}
 	mut state := []u32{len: 16}
 
@@ -201,7 +201,7 @@ fn initialize_state(key []byte, counter u32, nonce []byte) ?[]u32 {
 // The output is 64 random-looking bytes.
 fn block_generic(key []byte, counter u32, nonce []byte) ?[]byte {
 	// setup chacha state, checking was done on initialization step
-	mut cs := initialize_state(key, counter, nonce) ?
+	mut cs := initialize_state(key, counter, nonce)?
 	// copy of state
 	initial_state := cs[..cs.len].clone()
 
@@ -273,7 +273,7 @@ fn decrypt_generic(key []byte, counter u32, nonce []byte, ciphertext []byte) ?[]
 	mut decrypted_message := []byte{}
 
 	for i := 0; i < ciphertext.len / chacha20.block_size; i++ {
-		key_stream := block_generic(key, counter + u32(i), nonce) ?
+		key_stream := block_generic(key, counter + u32(i), nonce)?
 		block := ciphertext[i * chacha20.block_size..(i + 1) * chacha20.block_size]
 
 		mut dst := []byte{len: block.len}
@@ -286,7 +286,7 @@ fn decrypt_generic(key []byte, counter u32, nonce []byte, ciphertext []byte) ?[]
 	}
 	if ciphertext.len % chacha20.block_size != 0 {
 		j := ciphertext.len / chacha20.block_size
-		key_stream := block_generic(key, counter + u32(j), nonce) ?
+		key_stream := block_generic(key, counter + u32(j), nonce)?
 		block := ciphertext[j * chacha20.block_size..]
 
 		mut dst := []byte{len: block.len}

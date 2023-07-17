@@ -65,12 +65,12 @@ fn hchacha20(key []byte, nonce []byte) []byte {
 // as specified in https://datatracker.ietf.org/doc/html/draft-arciszewski-xchacha-03
 fn encrypt_extended(key []byte, ctr u32, nonce []byte, plaintext []byte) ?[]byte {
 	if nonce.len != x_nonce_size {
-		return error('xchacha: wrong x nonce size: $nonce.len')
+		return error('xchacha: wrong x nonce size: ${nonce.len}')
 	}
 	subkey := hchacha20(key, nonce[0..16])
 	mut cnonce := nonce[16..24].clone()
 	cnonce.prepend([byte(0x00), 0x00, 0x00, 0x00])
-	ciphertext := encrypt_generic(subkey, ctr, cnonce, plaintext) ?
+	ciphertext := encrypt_generic(subkey, ctr, cnonce, plaintext)?
 
 	return ciphertext
 }

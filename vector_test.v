@@ -25,11 +25,11 @@ fn test_cha20poly1305_vector_data() ? {
 		out_ciphertext := out[..plaintext.len]
 		out_tag := out[plaintext.len..]
 
-		ciphertext, mac := aead_encrypt(plaintext, key, nonce, aad) ?
+		ciphertext, mac := aead_encrypt(plaintext, key, nonce, aad)?
 		assert ciphertext == out_ciphertext
 		assert mac == out_tag
-		cp := new_chacha20poly1305(key) ?
-		res := cp.encrypt(plaintext, nonce, aad) ?
+		cp := new_chacha20poly1305(key)?
+		res := cp.encrypt(plaintext, nonce, aad)?
 
 		assert res.txt == out_ciphertext
 		assert res.tag == out_tag

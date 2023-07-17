@@ -95,7 +95,7 @@ fn aead_encrypt(plaintext []byte, key []byte, nonce []byte, aad []byte) ?([]byte
 		panic('chacha20poly1305: plaintext too large')
 	}
 	// First, a Poly1305 one-time key is generated from the 256-bit key
-	//  and nonce
+	// and nonce
 	otk := chacha20.otk_key_gen(key, nonce) ?
 
 	// Next, the ChaCha20 encryption function is called to encrypt the

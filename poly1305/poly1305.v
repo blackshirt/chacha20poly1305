@@ -27,7 +27,7 @@ mut:
 	h [5]u32
 
 	leftover int
-	buffer   []byte
+	buffer   []u8
 
 	done bool
 }
@@ -35,7 +35,7 @@ mut:
 // new_tag generates poly1305's tag authenticator for msg using a one-time key and
 // return the 16-byte result. The key must be unique for each message, authenticating two
 // different messages with the same key allows an attacker to forge messages at will.
-pub fn new_tag(msg []byte, key []byte) []byte {
+pub fn new_tag(msg []u8, key []u8) []u8 {
 	mut p := new_poly1305(key) or { panic(err.msg) }
 	p.input(msg)
 	tag := p.result()
@@ -44,7 +44,7 @@ pub fn new_tag(msg []byte, key []byte) []byte {
 
 // verify verifies mac is a valid authenticator for msg with the given key.
 // its return true when mac is valid, and false otherwise.
-pub fn verify(mac []byte, msg []byte, key []byte) bool {
+pub fn verify(mac []u8, msg []u8, key []u8) bool {
 	mut p := new_poly1305(key) or { panic(err.msg) }
 	p.input(msg)
 	tag := p.result()
@@ -54,12 +54,12 @@ pub fn verify(mac []byte, msg []byte, key []byte) bool {
 // new_poly1305 create new Poly1305 MAC instances and initializes it with the given key.
 // Poly1305 MAC cannot be used like common hash, because using a poly1305 key twice breaks its security.
 // Therefore feeding data to input to a running MAC after calling result causes it to panic.
-pub fn new_poly1305(key []byte) ?Poly1305 {
+pub fn new_poly1305(key []u8) ?Poly1305 {
 	if key.len != poly1305.key_size {
 		return error('wrong key size provided')
 	}
 	mut p := Poly1305{
-		buffer: []byte{len: poly1305.block_size}
+		buffer: []u8{len: poly1305.block_size}
 	}
 	// load the keys to two parts `r` and `s` and doing clamping
 	// with r &= 0xffffffc0ffffffc0ffffffc0fffffff
@@ -79,7 +79,7 @@ pub fn new_poly1305(key []byte) ?Poly1305 {
 
 // input feeds data into the Poly1305 internal state, its panic when
 // called after calling result.
-pub fn (mut p Poly1305) input(data []byte) {
+pub fn (mut p Poly1305) input(data []u8) {
 	if p.done {
 		panic(error('poly1305: feed input after result has been done'))
 	}
@@ -123,28 +123,28 @@ pub fn (mut p Poly1305) input(data []byte) {
 //
 //  This is primarily useful for implementing ChaCHa20 family authenticated
 //  encryption constructions.
-pub fn (mut p Poly1305) input_padded(data []byte) {
+pub fn (mut p Poly1305) input_padded(data []u8) {
 	p.input(data)
 
 	// Pad associated data with `\0` if it's unaligned with the block size
 	unaligned_len := data.len % poly1305.block_size
 
 	if unaligned_len != 0 {
-		pad := []byte{len: poly1305.block_size}
+		pad := []u8{len: poly1305.block_size}
 		pad_len := poly1305.block_size - unaligned_len
 		p.input(pad[..pad_len])
 	}
 }
 
 // chained_input process input messages in a chained manner
-pub fn (mut p Poly1305) chained_input(data []byte) Poly1305 {
+pub fn (mut p Poly1305) chained_input(data []u8) Poly1305 {
 	p.input(data)
 	return p
 }
 
 // result calculates and output tag bytes with len `tag_size`
 // and then `zeroize` all Poly1305's internal state.
-pub fn (mut p Poly1305) result() []byte {
+pub fn (mut p Poly1305) result() []u8 {
 	if p.leftover > 0 {
 		p.buffer[p.leftover] = byte(0x01)
 
@@ -239,7 +239,7 @@ pub fn (mut p Poly1305) result() []byte {
 	f = u64(h3) + u64(p.s[3]) + (f >> 32)
 	h3 = u32(f) // f as u32
 
-	mut tag := []byte{len: poly1305.tag_size}
+	mut tag := []u8{len: poly1305.tag_size}
 	binary.little_endian_put_u32(mut tag[0..4], h0)
 	binary.little_endian_put_u32(mut tag[4..8], h1)
 	binary.little_endian_put_u32(mut tag[8..12], h2)
