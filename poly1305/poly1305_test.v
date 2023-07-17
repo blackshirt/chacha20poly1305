@@ -6,11 +6,11 @@ import encoding.hex
 // There are 12 cases provided.
 fn test_poly1305_core_vector_tests() ? {
 	for i, c in poly1305.basic_poly_cases {
-		mut key := hex.decode(c.key) or { panic(err.msg) }
-		mut msg := hex.decode(c.msg) or { panic(err.msg) }
-		expected_tag := hex.decode(c.tag) or { panic(err.msg) }
+		mut key := hex.decode(c.key) or { panic(err.msg()) }
+		mut msg := hex.decode(c.msg) or { panic(err.msg()) }
+		expected_tag := hex.decode(c.tag) or { panic(err.msg()) }
 
-		mut poly := new_poly1305(key) ?
+		mut poly := new_poly1305(key)!
 
 		poly.input(msg)
 		tag := poly.result()
@@ -29,12 +29,12 @@ fn test_poly1305_core_vector_tests() ? {
 // its comes from golang poly1305 bvector test, except minus with changed internal state test
 fn test_smoked_data_vectors() ? {
 	for i, c in test_data {
-		mut key := hex.decode(c.key) or { panic(err.msg) }
-		mut msg := hex.decode(c.msg) or { panic(err.msg) }
-		expected_tag := hex.decode(c.tag) or { panic(err.msg) }
+		mut key := hex.decode(c.key) or { panic(err.msg()) }
+		mut msg := hex.decode(c.msg) or { panic(err.msg()) }
+		expected_tag := hex.decode(c.tag) or { panic(err.msg()) }
 
-		mut poly := new_poly1305(key) ?
-		// mut tag := []byte{len: tag_size}
+		mut poly := new_poly1305(key)!
+		// mut tag := []u8{len: tag_size}
 		poly.input(msg)
 		mut tag := poly.result()
 
