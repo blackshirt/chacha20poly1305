@@ -146,10 +146,10 @@ pub fn (mut p Poly1305) chained_input(data []u8) Poly1305 {
 // and then `zeroize` all Poly1305's internal state.
 pub fn (mut p Poly1305) result() []u8 {
 	if p.leftover > 0 {
-		p.buffer[p.leftover] = byte(0x01)
+		p.buffer[p.leftover] = u8(0x01)
 
 		for i in (p.leftover + 1) .. poly1305.block_size {
-			p.buffer[i] = byte(0x00)
+			p.buffer[i] = u8(0x00)
 		}
 
 		p.process_the_block(true)
@@ -345,6 +345,6 @@ fn (mut p Poly1305) zeroize() {
 
 	// zeroize internal buffer
 	for k := 0; k < p.buffer.len; k++ {
-		p.buffer[k] = byte(0x00)
+		p.buffer[k] = u8(0x00)
 	}
 }

@@ -11,15 +11,15 @@ struct ChapolyTest {
 }
 
 // this test data come from golang vector tests of the same module
-fn test_cha20poly1305_vector_data() ? {
+fn test_cha20poly1305_vector_data() ! {
 	for i, t in chacha20poly1305.chapoly_testcases {
-		plaintext := hex.decode(t.plaintext) or { panic(err.msg) }
-		aad := hex.decode(t.aad) or { panic(err.msg) }
-		key := hex.decode(t.key) or { panic(err.msg) }
-		nonce := hex.decode(t.nonce) or { panic(err.msg) }
+		plaintext := hex.decode(t.plaintext) or { panic(err.msg()) }
+		aad := hex.decode(t.aad) or { panic(err.msg()) }
+		key := hex.decode(t.key) or { panic(err.msg()) }
+		nonce := hex.decode(t.nonce) or { panic(err.msg()) }
 
 		// This output from golang was concatenation of ciphertext+tag
-		out := hex.decode(t.out) or { panic(err.msg) }
+		out := hex.decode(t.out) or { panic(err.msg()) }
 
 		// split out
 		out_ciphertext := out[..plaintext.len]

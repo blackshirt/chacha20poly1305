@@ -4,13 +4,14 @@ import benchmark
 import encoding.hex
 
 // test poly1305 key generator as specified in https://datatracker.ietf.org/doc/html/rfc8439#section-2.6.2
-fn test_onetime_key_gen() ? {
+fn test_onetime_key_gen() ! {
 	for i, v in chacha20.otk_cases {
-		key := hex.decode(v.key) or { panic(err.msg) }
-		nonce := hex.decode(v.nonce) or { panic(err.msg) }
+		key := hex.decode(v.key) or { panic(err.msg()) }
+		nonce := hex.decode(v.nonce) or { panic(err.msg()) }
 
 		otk := hex.decode(v.otk) or { panic(err.msg) }
 		out := otk_key_gen(key, nonce)?
+
 		assert out == otk
 	}
 }

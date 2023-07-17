@@ -22,11 +22,11 @@ const (
 )
 
 struct Chacha20Poly1305 {
-	key []byte
+	key []u8
 }
 
 // new_chacha20poly1305 creates Chacha20Poly1305 instances from key
-pub fn new_chacha20poly1305(key []byte) ?&Chacha20Poly1305 {
+pub fn new_chacha20poly1305(key []u8) !&Chacha20Poly1305 {
 	if key.len != chacha20poly1305.key_size {
 		return error('Bad key sizes')
 	}
@@ -37,26 +37,26 @@ pub fn new_chacha20poly1305(key []byte) ?&Chacha20Poly1305 {
 }
 
 struct AeadResult {
-	txt []byte
-	tag []byte
+	txt []u8
+	tag []u8
 }
 
 // message returns underlying message in the context of ciphertext or plaintext
-pub fn (r AeadResult) message() []byte {
+pub fn (r AeadResult) message() []u8 {
 	return r.txt
 }
 
 // tag return tag result of encrypt or decrypt
-pub fn (r AeadResult) tag() []byte {
+pub fn (r AeadResult) tag() []u8 {
 	return r.tag
 }
 
 // encrypt encrypts the plaintext with provided nonce and additional data aad and return result
-pub fn (c &Chacha20Poly1305) encrypt(plaintext []byte, nonce []byte, aad []byte) ?AeadResult {
+pub fn (c &Chacha20Poly1305) encrypt(plaintext []u8, nonce []u8, aad []u8) !AeadResult {
 	if nonce.len !in [chacha20poly1305.nonce_size, chacha20poly1305.x_nonce_size] {
 		return error('Bad nonce size')
 	}
-	ciphertext, tag := aead_encrypt(plaintext, c.key, nonce, aad) ?
+	ciphertext, tag := aead_encrypt(plaintext, c.key, nonce, aad)!
 	return AeadResult{
 		txt: ciphertext
 		tag: tag
@@ -64,8 +64,8 @@ pub fn (c &Chacha20Poly1305) encrypt(plaintext []byte, nonce []byte, aad []byte)
 }
 
 // decrypt decrypts ciphertext with provided nonce and additional data aad.
-pub fn (c &Chacha20Poly1305) decrypt(ciphertext []byte, nonce []byte, aad []byte) ?AeadResult {
-	plaintext, tag := aead_decrypt(ciphertext, c.key, nonce, aad) ?
+pub fn (c &Chacha20Poly1305) decrypt(ciphertext []u8, nonce []u8, aad []u8) !AeadResult {
+	plaintext, tag := aead_decrypt(ciphertext, c.key, nonce, aad)!
 
 	return AeadResult{
 		txt: plaintext
@@ -74,8 +74,8 @@ pub fn (c &Chacha20Poly1305) decrypt(ciphertext []byte, nonce []byte, aad []byte
 }
 
 // decrypt_and_verify decrypts the ciphertext and verify the mac match with result tag and return error otherwise.
-pub fn (c &Chacha20Poly1305) decrypt_and_verify(ciphertext []byte, nonce []byte, aad []byte, mac []byte) ?AeadResult {
-	res := c.decrypt(ciphertext, nonce, aad) ?
+pub fn (c &Chacha20Poly1305) decrypt_and_verify(ciphertext []u8, nonce []u8, aad []u8, mac []u8) !AeadResult {
+	res := c.decrypt(ciphertext, nonce, aad)!
 	if subtle.constant_time_compare(res.tag, mac) != 1 {
 		return error('Bad result tag')
 	}
@@ -83,7 +83,7 @@ pub fn (c &Chacha20Poly1305) decrypt_and_verify(ciphertext []byte, nonce []byte,
 }
 
 // aead_encrypt encrypt and authenticate plaintext with additional data
-fn aead_encrypt(plaintext []byte, key []byte, nonce []byte, aad []byte) ?([]byte, []byte) {
+fn aead_encrypt(plaintext []u8, key []u8, nonce []u8, aad []u8) !([]u8, []u8) {
 	if key.len != chacha20poly1305.key_size {
 		return error('Bad key sizes')
 	}
@@ -95,15 +95,17 @@ fn aead_encrypt(plaintext []byte, key []byte, nonce []byte, aad []byte) ?([]byte
 		panic('chacha20poly1305: plaintext too large')
 	}
 	// First, a Poly1305 one-time key is generated from the 256-bit key
+
 	// and nonce
 	otk := chacha20.otk_key_gen(key, nonce) ?
+
 
 	// Next, the ChaCha20 encryption function is called to encrypt the
 	//  plaintext, using the same key and nonce, and with the initial
 	//  counter set to 1
-	mut c := chacha20.new_cipher(key, nonce) ?
+	mut c := chacha20.new_cipher(key, nonce)!
 	c.set_counter(1)
-	ciphertext := c.encrypt(plaintext) ?
+	ciphertext := c.encrypt(plaintext)!
 
 	// Finally, the Poly1305 function is called with the Poly1305 key
 	// calculated above, and a message constructed
@@ -120,27 +122,27 @@ fn aead_encrypt(plaintext []byte, key []byte, nonce []byte, aad []byte) ?([]byte
 // producing the plaintext.
 // The Poly1305 function is still run on the AAD and the ciphertext, not the plaintext.
 // The calculated tag is bitwise compared to the received tag.  The message is authenticated if and only if the tags match.
-fn aead_decrypt(ciphertext []byte, key []byte, nonce []byte, aad []byte) ?([]byte, []byte) {
+fn aead_decrypt(ciphertext []u8, key []u8, nonce []u8, aad []u8) !([]u8, []u8) {
 	if key.len != chacha20poly1305.key_size {
 		return error('Bad key sizes')
 	}
 
 	if nonce.len !in [chacha20poly1305.nonce_size, chacha20poly1305.x_nonce_size] {
-		return error('Bad nonce size provided $nonce.len')
+		return error('Bad nonce size provided ${nonce.len}')
 	}
 
 	if u64(ciphertext.len) > (u64(1) << 38) - 48 {
 		panic('chacha20poly1305: ciphertext too large')
 	}
 	// First, a Poly1305 one-time key is generated from the 256-bit key and nonce
-	otk := chacha20.otk_key_gen(key, nonce) ?
+	otk := chacha20.otk_key_gen(key, nonce)!
 
 	// Next, the ChaCha20 encryption function is called to encrypt the
 	//  plaintext, using the same key and nonce, and with the initial
 	//  counter set to 1
-	mut c := chacha20.new_cipher(key, nonce) ?
+	mut c := chacha20.new_cipher(key, nonce)!
 	c.set_counter(1)
-	plaintext := c.encrypt(ciphertext) ?
+	plaintext := c.encrypt(ciphertext)!
 
 	// Finally, the Poly1305 function is called with the Poly1305 key
 	// calculated above, and a mac_data constructed in `construct_mac_data` step
@@ -154,8 +156,8 @@ fn aead_decrypt(ciphertext []byte, key []byte, nonce []byte, aad []byte) ?([]byt
 }
 
 // decrypt_and_verify_tag do decrypt and verify the tag result match with tag provided
-fn decrypt_and_verify_tag(ciphertext []byte, key []byte, nonce []byte, aad []byte, tag []byte) ?[]byte {
-	plaintext, mac := aead_decrypt(ciphertext, key, nonce, aad) ?
+fn decrypt_and_verify_tag(ciphertext []u8, key []u8, nonce []u8, aad []u8, tag []u8) ![]u8 {
+	plaintext, mac := aead_decrypt(ciphertext, key, nonce, aad)!
 	if subtle.constant_time_compare(tag, mac) != 1 {
 		return error('Bad result tag')
 	}
@@ -164,19 +166,19 @@ fn decrypt_and_verify_tag(ciphertext []byte, key []byte, nonce []byte, aad []byt
 
 // maximum size of the associated data) is set to 2^64-1
 // octets by the length field for associated data
-fn num_to_8_le_bytes(num u64) []byte {
-	mut buf := []byte{len: 8}
+fn num_to_8_le_bytes(num u64) []u8 {
+	mut buf := []u8{len: 8}
 	binary.little_endian_put_u64(mut buf, num)
 	return buf
 }
 
 // pad to 16 byte block
-fn pad16(x []byte) []byte {
+fn pad16(x []u8) []u8 {
 	mut buf := x.clone()
 	if buf.len % 16 == 0 {
 		return buf
 	}
-	pad_bytes := []byte{len: 16 - buf.len % 16, init: 0}
+	pad_bytes := []u8{len: 16 - buf.len % 16, init: 0}
 	buf << pad_bytes
 	return buf
 }
@@ -197,7 +199,7 @@ fn pad16(x []byte) []byte {
 //       little-endian integer).
 //    *  The length of the ciphertext in octets (as a 64-bit little-
 //       endian integer).
-fn construct_mac_data(aad []byte, ctxt []byte) []byte {
+fn construct_mac_data(aad []u8, ctxt []u8) []u8 {
 	// ctxt_padded := pad16(ctxt)
 	mut msg := pad16(aad).clone()
 	msg << pad16(ctxt)
