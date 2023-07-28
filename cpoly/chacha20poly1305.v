@@ -8,86 +8,26 @@
 //   A 96-bit nonce -- different for each invocation with the same key
 //   An arbitrary length plaintext
 //   Arbitrary length additional authenticated data (AAD)
-module chacha20poly1305
+module cpoly
 
 import encoding.binary
 import crypto.internal.subtle
-import chacha20
-import poly1305
+import cpoly.internal.chacha20
+import cpoly.internal.poly1305
 
-const (
-	key_size     = 32
+pub const (
+	key_size     = chacha20.key_size
 	nonce_size   = 12
 	x_nonce_size = 24
+	tag_size     = poly1305.tag_size
 )
 
-struct Chacha20Poly1305 {
-	key []u8
-}
-
-// new_chacha20poly1305 creates Chacha20Poly1305 instances from key
-pub fn new_chacha20poly1305(key []u8) !&Chacha20Poly1305 {
-	if key.len != chacha20poly1305.key_size {
-		return error('Bad key sizes')
-	}
-	mut c := &Chacha20Poly1305{
-		key: key
-	}
-	return c
-}
-
-struct AeadResult {
-	txt []u8
-	tag []u8
-}
-
-// message returns underlying message in the context of ciphertext or plaintext
-pub fn (r AeadResult) message() []u8 {
-	return r.txt
-}
-
-// tag return tag result of encrypt or decrypt
-pub fn (r AeadResult) tag() []u8 {
-	return r.tag
-}
-
-// encrypt encrypts the plaintext with provided nonce and additional data aad and return result
-pub fn (c &Chacha20Poly1305) encrypt(plaintext []u8, nonce []u8, aad []u8) !AeadResult {
-	if nonce.len !in [chacha20poly1305.nonce_size, chacha20poly1305.x_nonce_size] {
-		return error('Bad nonce size')
-	}
-	ciphertext, tag := aead_encrypt(plaintext, c.key, nonce, aad)!
-	return AeadResult{
-		txt: ciphertext
-		tag: tag
-	}
-}
-
-// decrypt decrypts ciphertext with provided nonce and additional data aad.
-pub fn (c &Chacha20Poly1305) decrypt(ciphertext []u8, nonce []u8, aad []u8) !AeadResult {
-	plaintext, tag := aead_decrypt(ciphertext, c.key, nonce, aad)!
-
-	return AeadResult{
-		txt: plaintext
-		tag: tag
-	}
-}
-
-// decrypt_and_verify decrypts the ciphertext and verify the mac match with result tag and return error otherwise.
-pub fn (c &Chacha20Poly1305) decrypt_and_verify(ciphertext []u8, nonce []u8, aad []u8, mac []u8) !AeadResult {
-	res := c.decrypt(ciphertext, nonce, aad)!
-	if subtle.constant_time_compare(res.tag, mac) != 1 {
-		return error('Bad result tag')
-	}
-	return res
-}
-
 // aead_encrypt encrypt and authenticate plaintext with additional data
-fn aead_encrypt(plaintext []u8, key []u8, nonce []u8, aad []u8) !([]u8, []u8) {
-	if key.len != chacha20poly1305.key_size {
+pub fn aead_encrypt(key []u8, nonce []u8, aad []u8, plaintext []u8) !([]u8, []u8) {
+	if key.len != cpoly.key_size {
 		return error('Bad key sizes')
 	}
-	if nonce.len !in [chacha20poly1305.nonce_size, chacha20poly1305.x_nonce_size] {
+	if nonce.len !in [cpoly.nonce_size, cpoly.x_nonce_size] {
 		return error('Bad nonce size')
 	}
 	// check plaintext len doesn't exceed
@@ -109,24 +49,24 @@ fn aead_encrypt(plaintext []u8, key []u8, nonce []u8, aad []u8) !([]u8, []u8) {
 	// Finally, the Poly1305 function is called with the Poly1305 key
 	// calculated above, and a message constructed
 	msg := construct_mac_data(aad, ciphertext)
-	tag := poly1305.new_tag(msg, otk)
+	mac := poly1305.new_tag(msg, otk)
 
 	// the spec says should match
 	// assert ciphertext.len == plaintext.len
-	return ciphertext, tag
+	return ciphertext, mac
 }
 
 // aead_decrypt decrypt the ciphertext. decryption is similar with the following differences:
 // The roles of ciphertext and plaintext are reversed, so the ChaCha20 encryption function is applied to the ciphertext,
 // producing the plaintext.
 // The Poly1305 function is still run on the AAD and the ciphertext, not the plaintext.
-// The calculated tag is bitwise compared to the received tag.  The message is authenticated if and only if the tags match.
-fn aead_decrypt(ciphertext []u8, key []u8, nonce []u8, aad []u8) !([]u8, []u8) {
-	if key.len != chacha20poly1305.key_size {
+// The calculated mac is bitwise compared to the received mac.  The message is authenticated if and only if the tags match.
+pub fn aead_decrypt(key []u8, nonce []u8, aad []u8, ciphertext []u8) !([]u8, []u8) {
+	if key.len != cpoly.key_size {
 		return error('Bad key sizes')
 	}
 
-	if nonce.len !in [chacha20poly1305.nonce_size, chacha20poly1305.x_nonce_size] {
+	if nonce.len !in [cpoly.nonce_size, cpoly.x_nonce_size] {
 		return error('Bad nonce size provided ${nonce.len}')
 	}
 
@@ -148,17 +88,17 @@ fn aead_decrypt(ciphertext []u8, key []u8, nonce []u8, aad []u8) !([]u8, []u8) {
 	//
 	// notes : The Poly1305 function is still run on the AAD and the ciphertext, not the plaintext
 	mac_data := construct_mac_data(aad, ciphertext)
-	tag := poly1305.new_tag(mac_data, otk)
+	mac := poly1305.new_tag(mac_data, otk)
 
 	assert ciphertext.len == plaintext.len
-	return plaintext, tag
+	return plaintext, mac
 }
 
-// decrypt_and_verify_tag do decrypt and verify the tag result match with tag provided
-fn decrypt_and_verify_tag(ciphertext []u8, key []u8, nonce []u8, aad []u8, tag []u8) ![]u8 {
-	plaintext, mac := aead_decrypt(ciphertext, key, nonce, aad)!
-	if subtle.constant_time_compare(tag, mac) != 1 {
-		return error('Bad result tag')
+// decrypt_and_verify_tag do decrypt and verify the mac result match with mac provided
+pub fn decrypt_and_verify_tag(key []u8, nonce []u8, aad []u8, ciphertext []u8, mac []u8) ![]u8 {
+	plaintext, tags := aead_decrypt(key, nonce, aad, ciphertext)!
+	if subtle.constant_time_compare(tags, mac) != 1 {
+		return error('Bad result mac')
 	}
 	return plaintext
 }

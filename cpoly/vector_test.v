@@ -1,4 +1,4 @@
-module chacha20poly1305
+module cpoly
 
 import encoding.hex
 
@@ -12,7 +12,7 @@ struct ChapolyTest {
 
 // this test data come from golang vector tests of the same module
 fn test_cha20poly1305_vector_data() ! {
-	for i, t in chacha20poly1305.chapoly_testcases {
+	for i, t in cpoly.chapoly_testcases {
 		plaintext := hex.decode(t.plaintext) or { panic(err.msg()) }
 		aad := hex.decode(t.aad) or { panic(err.msg()) }
 		key := hex.decode(t.key) or { panic(err.msg()) }
@@ -25,14 +25,13 @@ fn test_cha20poly1305_vector_data() ! {
 		out_ciphertext := out[..plaintext.len]
 		out_tag := out[plaintext.len..]
 
-		ciphertext, mac := aead_encrypt(plaintext, key, nonce, aad)!
+		ciphertext, mac := aead_encrypt(key, nonce, aad, plaintext)!
 		assert ciphertext == out_ciphertext
 		assert mac == out_tag
-		cp := new_chacha20poly1305(key)!
-		res := cp.encrypt(plaintext, nonce, aad)!
+		message, tag := aead_encrypt(key, nonce, aad, plaintext)!
 
-		assert res.txt == out_ciphertext
-		assert res.tag == out_tag
+		assert message == out_ciphertext
+		assert tag == out_tag
 	}
 }
 
