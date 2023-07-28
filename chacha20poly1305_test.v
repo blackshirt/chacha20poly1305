@@ -1,8 +1,8 @@
-module cpoly
+module chacha20poly1305
 
 import encoding.hex
-import cpoly.internal.chacha20
-import cpoly.internal.poly1305
+import chacha20
+import poly1305
 
 fn test_aead_encrypt_example_test() ! {
 	plaintext := "Ladies and Gentlemen of the class of '99: If I could offer you only one tip for the future, sunscreen would be it.".bytes()
@@ -71,7 +71,7 @@ fn test_aead_decrypt_vector_test_51() ! {
 }
 
 fn test_decrypt_and_verify_tag() ! {
-	for i, c in cpoly.aead_cases {
+	for i, c in chacha20poly1305.aead_cases {
 		key := hex.decode(c.key) or { panic(err.msg()) }
 		aad := hex.decode(c.aad) or { panic(err.msg()) }
 		nonce := hex.decode(c.nonce) or { panic(err.msg()) }

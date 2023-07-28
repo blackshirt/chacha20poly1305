@@ -1,4 +1,4 @@
-module cpoly
+module chacha20poly1305
 
 import encoding.hex
 
@@ -12,7 +12,7 @@ struct ChapolyTest {
 
 // this test data come from golang vector tests of the same module
 fn test_cha20poly1305_vector_data() ! {
-	for i, t in cpoly.chapoly_testcases {
+	for i, t in chacha20poly1305.chapoly_testcases {
 		plaintext := hex.decode(t.plaintext) or { panic(err.msg()) }
 		aad := hex.decode(t.aad) or { panic(err.msg()) }
 		key := hex.decode(t.key) or { panic(err.msg()) }

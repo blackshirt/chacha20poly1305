@@ -8,12 +8,12 @@
 //   A 96-bit nonce -- different for each invocation with the same key
 //   An arbitrary length plaintext
 //   Arbitrary length additional authenticated data (AAD)
-module cpoly
+module chacha20poly1305
 
 import encoding.binary
 import crypto.internal.subtle
-import cpoly.internal.chacha20
-import cpoly.internal.poly1305
+import chacha20
+import poly1305
 
 pub const (
 	key_size     = chacha20.key_size
@@ -24,10 +24,10 @@ pub const (
 
 // aead_encrypt encrypt and authenticate plaintext with additional data
 pub fn aead_encrypt(key []u8, nonce []u8, aad []u8, plaintext []u8) !([]u8, []u8) {
-	if key.len != cpoly.key_size {
+	if key.len != chacha20poly1305.key_size {
 		return error('Bad key sizes')
 	}
-	if nonce.len !in [cpoly.nonce_size, cpoly.x_nonce_size] {
+	if nonce.len !in [chacha20poly1305.nonce_size, chacha20poly1305.x_nonce_size] {
 		return error('Bad nonce size')
 	}
 	// check plaintext len doesn't exceed
@@ -62,11 +62,11 @@ pub fn aead_encrypt(key []u8, nonce []u8, aad []u8, plaintext []u8) !([]u8, []u8
 // The Poly1305 function is still run on the AAD and the ciphertext, not the plaintext.
 // The calculated mac is bitwise compared to the received mac.  The message is authenticated if and only if the tags match.
 pub fn aead_decrypt(key []u8, nonce []u8, aad []u8, ciphertext []u8) !([]u8, []u8) {
-	if key.len != cpoly.key_size {
+	if key.len != chacha20poly1305.key_size {
 		return error('Bad key sizes')
 	}
 
-	if nonce.len !in [cpoly.nonce_size, cpoly.x_nonce_size] {
+	if nonce.len !in [chacha20poly1305.nonce_size, chacha20poly1305.x_nonce_size] {
 		return error('Bad nonce size provided ${nonce.len}')
 	}
 
