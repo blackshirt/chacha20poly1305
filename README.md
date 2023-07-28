@@ -7,16 +7,12 @@ This module provides authenticated encryption with additional data (AEAD) algori
 Its backed by `chacha20` (and `xchacha20`) symetric key stream cipher encryption 
 and `poly1305` message authentication code (MAC) included in submodules in the same repository.
 
-# module cpoly
-
-
-
-
+# module 
 ## Contents
 - [Constants](#Constants)
 - [aead_encrypt](#aead_encrypt)
-- [decrypt_and_verify_tag](#decrypt_and_verify_tag)
 - [aead_decrypt](#aead_decrypt)
+- [decrypt_and_verify_tag](#decrypt_and_verify_tag)
 
 ## Constants
 ```v
@@ -54,11 +50,11 @@ decrypt_and_verify_tag do decrypt and verify the mac result match with mac provi
 fn aead_decrypt(key []u8, nonce []u8, aad []u8, ciphertext []u8) !([]u8, []u8)
 ```
 
-aead_decrypt decrypt the ciphertext. decryption is similar with the following differences: The roles of ciphertext and plaintext are reversed, so the ChaCha20 encryption function is applied to the ciphertext,
+`aead_decrypt` decrypt the ciphertext. decryption is similar with the following differences: The roles of ciphertext and plaintext are reversed, so the ChaCha20 encryption function is applied to the ciphertext,
 producing the plaintext.  
 The Poly1305 function is still run on the AAD and the ciphertext, not the plaintext.  
 The calculated mac is bitwise compared to the received mac.  The message is authenticated if and only if the tags match.  
 
 [[Return to contents]](#Contents)
 
-#### Powered by vdoc. Generated on: 28 Jul 2023 18:58:51
+
