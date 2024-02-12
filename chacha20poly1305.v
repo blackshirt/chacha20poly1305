@@ -29,10 +29,10 @@ interface AEAD {
     // encrypt encrypts and authenticates the provided plaintext along with a nonce, and associated data.
 	// It returns the ciphertext and appends the result into the dst. 
 	// The nonce must be `nonce_size()` bytes long and required to be unique for all time, for a given key
-    encrypt(mut dst []u8, plaintext []u8, aad []u8, nonce []u8) ![]u8
+    encrypt(mut dst []u8, plaintext []u8, nonce []u8, aad []u8) ![]u8
     // decrypt decrypts and authenticates (verifies) the provided ciphertext along with a nonce, and  
 	// associated data. If successful,  it returns the plaintext and appends the resulting plaintext to dst.
-    decrypt(mut dst []u8, ciphertext []u8, aad []u8, nonce []u8,) ![]u8
+    decrypt(mut dst []u8, ciphertext []u8, nonce []u8, aad []u8) ![]u8
 }
 
 const key_size     = 32
@@ -41,18 +41,19 @@ const x_nonce_size = 24
 const tag_size     = 16
 
 struct Chacha20Poly1305 {
+	key [key_size]u8 
 	// nonce_size, default to nonce_size
-	nc_size int = nonce_size
+	nonce int = nonce_size
 }
 
 fn new_aead(key []u8) !&AEAD {
 	if key.len != key_size {
-		return error(""chacha20poly1305: bad key size")
+		return error("chacha20poly1305: bad key size")
 	}
 }
 
 fn (x Chacha20Poly1305) nonce_size() int {
-	return x.nc_size
+	return x.nonce
 }
 
 fn (x Chacha20Poly1305) tag_size() int {
@@ -79,6 +80,25 @@ fn (mut x Chacha20Poly1305) encrypt(msg []u8, aad []u8, nonce []u8) ![]u8 {
 }
 
 
+// encrypt encrypts and authenticate plaintext with additional data
+pub fn encrypt(plaintext []u8, key []u8, nonce []u8, aad []u8) ![]u8 {
+	if key.len != chacha20poly1305.key_size {
+		return error('Bad key sizes')
+	}
+	if nonce.len !in [chacha20poly1305.nonce_size, chacha20poly1305.x_nonce_size] {
+		return error('Bad nonce size')
+	}
+	// check plaintext len doesn't exceed
+	if u64(plaintext.len) > (u64(1) << 38) - 64 {
+		panic('chacha20poly1305: plaintext too large')
+	}
+	return encrypt_generic(plaintext, key, nonce, aad)
+}
+
+fn (c Chacha20Poly1305) encrypt_generic(plaintext []u8, key []u8, nonce []u8, aad []u8) {
+	// chacha20 stream cipher
+	cs := chacha20.new_cipher(c.key[..], nonce)!
+}
 // aead_encrypt encrypt and authenticate plaintext with additional data
 pub fn aead_encrypt(key []u8, nonce []u8, aad []u8, plaintext []u8) !([]u8, []u8) {
 	if key.len != chacha20poly1305.key_size {
