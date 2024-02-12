@@ -95,10 +95,47 @@ pub fn encrypt(plaintext []u8, key []u8, nonce []u8, aad []u8) ![]u8 {
 	return encrypt_generic(plaintext, key, nonce, aad)
 }
 
-fn (c Chacha20Poly1305) encrypt_generic(plaintext []u8, key []u8, nonce []u8, aad []u8) {
-	// chacha20 stream cipher
-	cs := chacha20.new_cipher(c.key[..], nonce)!
+fn (c Chacha20Poly1305) encrypt_generic(plaintext []u8, nonce []u8, aad []u8) {
+	// First, generates the Poly1305 Key Using ChaCha20 stream cipher.
+	// see https://datatracker.ietf.org/doc/html/rfc8439#section-2.6
+	// creates ChaCha20 stream cipher, with key and monce
+	// internally, the counter is set to 0, 
+	mut cs := chacha20.new_cipher(c.key[..], nonce)!
+	// and then performing Chacha20 block function 
+	mut polykey := []u8{len: key_size}
+	cs.xor_key_stream(mut polykey, polykey)
+
+	// Next, the ChaCha20 encryption function is called to encrypt the
+	// plaintext, using the same key and nonce, and with the initial
+	// counter set to 1.
+	cs.set_counter(1)
+	cs.xor_key_stream(mut ciphertext, plaintext)
+
+	// Finally, the Poly1305 function is called with the Poly1305 key
+	// calculated above, and a message constructed as a concatenation of
+	// the following:
+	mut po := poly1305.new(polykey)!
+	mut padmsg := []u8{}
+	pad_to_16(mut padmsg, aad)
+	pad_to_16(mut padmsg, ciphertext)
+	
+	mut b8 := []u8{len: 8}
+	binary.little_endian_put_u64(mut b8, u64(aad.len))
+	pad_to_16(mut padmsg, b8)
+
+	binary.little_endian_put_u64(mut b8, u64(ciphertext.len))
+	pad_to_16(mut padmsg, b8)
+	
+	// update Poly1305 state with this padmsg
+	po.update(padmsg)
+	mut tag := []u8{len: tag_size)
+	po.finish(mut tag)
+
+	
 }
+
+
+		
 // aead_encrypt encrypt and authenticate plaintext with additional data
 pub fn aead_encrypt(key []u8, nonce []u8, aad []u8, plaintext []u8) !([]u8, []u8) {
 	if key.len != chacha20poly1305.key_size {
@@ -111,9 +148,8 @@ pub fn aead_encrypt(key []u8, nonce []u8, aad []u8, plaintext []u8) !([]u8, []u8
 	if u64(plaintext.len) > (u64(1) << 38) - 64 {
 		panic('chacha20poly1305: plaintext too large')
 	}
-	// First, a Poly1305 one-time key is generated from the 256-bit key
-
-	// and nonce
+	// First, generates the Poly1305 Key Using ChaCha20
+	// see https://datatracker.ietf.org/doc/html/rfc8439#section-2.6
 	otk := chacha20.otk_key_gen(key, nonce)!
 
 	// Next, the ChaCha20 encryption function is called to encrypt the
@@ -214,6 +250,17 @@ fn take_slice_for_append(input []u8, n int) ([]u8, []u8) {
 	tail = head[input.len:]
 	return
 }
+
+fn pad_to_16(mut out []u8, b []u8) {
+	if b.len % 16 == 0 {
+		out << b
+		return
+	}
+	pad := []u8{len: 16 - b.len % 16}
+	out << b
+	out << pad
+}
+		
 // pad to 16 u8 block
 fn pad16(x []u8) []u8 {
 	mut buf := x.clone()
