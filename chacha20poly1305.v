@@ -15,12 +15,65 @@ import crypto.internal.subtle
 import chacha20
 import poly1305
 
-pub const (
-	key_size     = chacha20.key_size
-	nonce_size   = 12
-	x_nonce_size = 24
-	tag_size     = poly1305.tag_size
-)
+// This interface was a proposed draft of `Aead` interfaces likes discussion at discord channel.
+// see https://discord.com/channels/592103645835821068/592320321995014154/1206029352412778577
+// Aead represents Authenticated Encryption with Additional Data (AEAD) interface 
+interface Aead {
+    // nonce_size return the nonce size (in bytes) used by this AEAD algorithm
+    nonce_size() int
+    // tag_size returns the authenticated tag size (in bytes) produced  by this AEAD algorithm
+    tag_size() int
+    // overhead returns the maximum difference between the lengths of a plaintext and its ciphertext. 
+    overhead() int
+    // encrypts and authenticates plaintext, authenticates the additional data 
+    encrypt(msg []u8, aad []u8, key []u8, nonce []u8) ![]u8
+    // decrypt decrypts and authenticates ciphertext and authenticates (verifies) the additional data 
+    decrypt(ciphertext []u8, aad []u8, nonce []u8, key []u8) ![]u8
+}
+
+const key_size     = 32
+const nonce_size   = 12
+const x_nonce_size = 24
+const tag_size     = 16
+
+struct Chacha20Poly1305 {
+	// nonce_size, default to nonce_size
+	nc_size int = nonce_size
+}
+
+fn new_aead(key []u8) !&Aead {
+	if key.len != key_size {
+		return error(""chacha20poly1305: bad key size")
+	}
+}
+
+fn (x Chacha20Poly1305) nonce_size() int {
+	return x.nc_size
+}
+
+fn (x Chacha20Poly1305) tag_size() int {
+	return tag_size
+}
+
+fn (x Chacha20Poly1305) overhead() int {
+	return tag_size
+}
+
+
+fn (mut x Chacha20Poly1305) encrypt(msg []u8, aad []u8, nonce []u8) ![]u8 {
+	if nonce.len != x.nonce_size() {
+		return error('chacha20poly1305: Bad nonce size')
+	}
+	// check if the plaintext length doesn't exceed the amount of limit.
+	// its comes from the internal of chacha20 mechanism, where the counter are u32 
+	// with the facts of 64 bytes block of chacha20 operates on, we can measure the amount 
+	// of encrypted data possible in a single invocation, ie.,
+	// amount = (2^32-1)*64 = 274,877,906,880 bytes, or nearly 256 GB
+	if u64(plaintext.len) > (u64(1) << 38) - 64 {
+		panic('chacha20poly1305: plaintext too large')
+	}
+}
+
 
 // aead_encrypt encrypt and authenticate plaintext with additional data
 pub fn aead_encrypt(key []u8, nonce []u8, aad []u8, plaintext []u8) !([]u8, []u8) {
