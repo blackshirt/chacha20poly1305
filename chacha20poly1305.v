@@ -65,11 +65,11 @@ fn (c Chacha20Poly1305) nonce_size() int {
 	return c.ncsize
 }
 
-fn (x Chacha20Poly1305) tag_size() int {
+fn (c Chacha20Poly1305) tag_size() int {
 	return tag_size
 }
 
-fn (x Chacha20Poly1305) overhead() int {
+fn (c Chacha20Poly1305) overhead() int {
 	return tag_size
 }
 
@@ -157,6 +157,11 @@ fn (c Chacha20Poly1305) decrypt_generic(ciphertext []u8, nonce []u8, aad []u8) !
 	// plaintext, using the same key and nonce, and with the initial
 	// counter set to 1.
 	cs.set_counter(1)
+	
+	// Remember, ciphertext = plaintext + tag (overhead) bytes
+	split_at := ciphertext.len - c.tag_size()
+	scrambled := ciphertext[0..split_at]
+	mac := ciphertext[split_at..]
 	mut ciphertext := []u8{len: plaintext.len}
 	cs.xor_key_stream(mut ciphertext, plaintext)
 
