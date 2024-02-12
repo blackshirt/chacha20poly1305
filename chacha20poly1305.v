@@ -12,23 +12,27 @@ module chacha20poly1305
 
 import encoding.binary
 import crypto.internal.subtle
-import chacha20
-import poly1305
+import x.crypto.chacha20
+import x.crypto.poly1305
 
-// This interface was a proposed draft of `Aead` interfaces likes discussion at discord channel.
+// This interface was a proposed draft of `AEAD` interfaces likes discussion at discord channel.
 // see https://discord.com/channels/592103645835821068/592320321995014154/1206029352412778577
-// Aead represents Authenticated Encryption with Additional Data (AEAD) interface 
-interface Aead {
-    // nonce_size return the nonce size (in bytes) used by this AEAD algorithm
+// Authenticated Encryption with Additional Data (AEAD) interface 
+interface AEAD {
+    // nonce_size return the nonce size (in bytes) used by this AEAD algorithm that should be 
+	// passed to `.encrypt` or `.decrypt`.
     nonce_size() int
-    // tag_size returns the authenticated tag size (in bytes) produced  by this AEAD algorithm
+    // tag_size returns the authenticated tag size (in bytes) produced by this AEAD algorithm.
     tag_size() int
     // overhead returns the maximum difference between the lengths of a plaintext and its ciphertext. 
     overhead() int
-    // encrypts and authenticates plaintext, authenticates the additional data 
-    encrypt(msg []u8, aad []u8, key []u8, nonce []u8) ![]u8
-    // decrypt decrypts and authenticates ciphertext and authenticates (verifies) the additional data 
-    decrypt(ciphertext []u8, aad []u8, nonce []u8, key []u8) ![]u8
+    // encrypt encrypts and authenticates the provided plaintext along with a nonce, and associated data.
+	// It returns the ciphertext and appends the result into the dst. 
+	// The nonce must be `nonce_size()` bytes long and required to be unique for all time, for a given key
+    encrypt(mut dst []u8, plaintext []u8, aad []u8, nonce []u8) ![]u8
+    // decrypt decrypts and authenticates (verifies) the provided ciphertext along with a nonce, and  
+	// associated data. If successful,  it returns the plaintext and appends the resulting plaintext to dst.
+    decrypt(mut dst []u8, ciphertext []u8, aad []u8, nonce []u8,) ![]u8
 }
 
 const key_size     = 32
@@ -41,7 +45,7 @@ struct Chacha20Poly1305 {
 	nc_size int = nonce_size
 }
 
-fn new_aead(key []u8) !&Aead {
+fn new_aead(key []u8) !&AEAD {
 	if key.len != key_size {
 		return error(""chacha20poly1305: bad key size")
 	}
@@ -164,7 +168,33 @@ fn num_to_8_le_bytes(num u64) []u8 {
 	return buf
 }
 
-// pad to 16 byte block
+fn write_u64(mut p &poly1305.Poly1305, n u64) {
+	mut buf := []u8{len: 8}
+	binary.little_endian_put_u64(mut buf, n)
+	p.update(buf)
+}
+
+fn write_with_padding(mut p &poly1305.Poly1305, b []u8) {
+	p.update(b)
+	rem := len(b) % 16
+	if rem != 0 {
+		buf := [16]u8{}
+		padlen := 16 - rem
+		p.update(buf[..padlen])
+	}
+}
+
+fn take_slice_for_append(input []u8, n int) ([]u8, []u8) {
+	if total := input.len + n; cap(input) >= total {
+		head = input[:total]
+	} else {
+		head = make([]u8, total)
+		copy(head, input)
+	}
+	tail = head[input.len:]
+	return
+}
+// pad to 16 u8 block
 fn pad16(x []u8) []u8 {
 	mut buf := x.clone()
 	if buf.len % 16 == 0 {
