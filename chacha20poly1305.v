@@ -41,19 +41,28 @@ const x_nonce_size = 24
 const tag_size     = 16
 
 struct Chacha20Poly1305 {
-	key [key_size]u8 
-	// nonce_size, default to nonce_size
-	nonce int = nonce_size
+	key 	[]u8 	= []u8{len: key_size}
+	ncsize 	int 	= nonce_size
 }
 
-fn new_aead(key []u8) !&AEAD {
+fn new(key []u8, ncsize int) !&AEAD {
 	if key.len != key_size {
 		return error("chacha20poly1305: bad key size")
 	}
+	if ncsize != nonce_size && ncsize != x_nonce_size {
+		return error("chacha20poly1305: bad nonce size supplied, its should 12 or 24")
+	}
+	c := &Chacha20Poly1305{
+		key: key
+		ncsize: ncsize
+	}
+	return c
 }
 
-fn (x Chacha20Poly1305) nonce_size() int {
-	return x.nonce
+
+
+fn (c Chacha20Poly1305) nonce_size() int {
+	return c.ncsize
 }
 
 fn (x Chacha20Poly1305) tag_size() int {
@@ -65,9 +74,9 @@ fn (x Chacha20Poly1305) overhead() int {
 }
 
 
-fn (mut x Chacha20Poly1305) encrypt(msg []u8, aad []u8, nonce []u8) ![]u8 {
-	if nonce.len != x.nonce_size() {
-		return error('chacha20poly1305: Bad nonce size')
+fn (c Chacha20Poly1305) encrypt(plaintext []u8, nonce []u8, aad []u8) ![]u8 {
+	if nonce.len != c.nonce_size() {
+		return error('chacha20poly1305: unmatching nonce size')
 	}
 	// check if the plaintext length doesn't exceed the amount of limit.
 	// its comes from the internal of chacha20 mechanism, where the counter are u32 
@@ -77,30 +86,17 @@ fn (mut x Chacha20Poly1305) encrypt(msg []u8, aad []u8, nonce []u8) ![]u8 {
 	if u64(plaintext.len) > (u64(1) << 38) - 64 {
 		panic('chacha20poly1305: plaintext too large')
 	}
+	return c.encrypt_generic(plaintext, nonce, aad)
 }
 
 
-// encrypt encrypts and authenticate plaintext with additional data
-pub fn encrypt(plaintext []u8, key []u8, nonce []u8, aad []u8) ![]u8 {
-	if key.len != chacha20poly1305.key_size {
-		return error('Bad key sizes')
-	}
-	if nonce.len !in [chacha20poly1305.nonce_size, chacha20poly1305.x_nonce_size] {
-		return error('Bad nonce size')
-	}
-	// check plaintext len doesn't exceed
-	if u64(plaintext.len) > (u64(1) << 38) - 64 {
-		panic('chacha20poly1305: plaintext too large')
-	}
-	return encrypt_generic(plaintext, key, nonce, aad)
-}
-
-fn (c Chacha20Poly1305) encrypt_generic(plaintext []u8, nonce []u8, aad []u8) {
+fn (c Chacha20Poly1305) encrypt_generic(plaintext []u8, nonce []u8, aad []u8) ![]u8 {
 	// First, generates the Poly1305 Key Using ChaCha20 stream cipher.
 	// see https://datatracker.ietf.org/doc/html/rfc8439#section-2.6
-	// creates ChaCha20 stream cipher, with key and monce
-	// internally, the counter is set to 0, 
-	mut cs := chacha20.new_cipher(c.key[..], nonce)!
+	// creates ChaCha20 cipher with key from this Chacha20Poly1305 instance 
+	// and provided nonce.
+	mut cs := chacha20.new_cipher(c.key, nonce)!
+	
 	// and then performing Chacha20 block function 
 	mut polykey := []u8{len: key_size}
 	cs.xor_key_stream(mut polykey, polykey)
@@ -109,6 +105,7 @@ fn (c Chacha20Poly1305) encrypt_generic(plaintext []u8, nonce []u8, aad []u8) {
 	// plaintext, using the same key and nonce, and with the initial
 	// counter set to 1.
 	cs.set_counter(1)
+	mut ciphertext := []u8{len: plaintext.len}
 	cs.xor_key_stream(mut ciphertext, plaintext)
 
 	// Finally, the Poly1305 function is called with the Poly1305 key
@@ -131,10 +128,79 @@ fn (c Chacha20Poly1305) encrypt_generic(plaintext []u8, nonce []u8, aad []u8) {
 	mut tag := []u8{len: tag_size)
 	po.finish(mut tag)
 
-	
+	// add this tag to ciphertext
+	ciphertext << tag 
+
+	return ciphertext
 }
 
 
+fn (c Chacha20Poly1305) decrypt(ciphertext []u8, nonce []u8, aad []u8) ![]u8 {
+	if nonce.len != c.nonce_size() {
+		return error('chacha20poly1305: unmatching nonce size')
+	}
+	if u64(ciphertext.len) > (u64(1) << 38) - 48 {
+		return error('chacha20poly1305: ciphertext too large')
+	}
+	return c.decrypy_generic(ciphertext, nonce, aad)
+}
+
+
+fn (c Chacha20Poly1305) decrypt_generic(ciphertext []u8, nonce []u8, aad []u8) ![]u8 {
+	mut cs := chacha20.new_cipher(c.key, nonce)!
+	
+	// and then performing Chacha20 block function 
+	mut polykey := []u8{len: key_size}
+	cs.xor_key_stream(mut polykey, polykey)
+
+	// Next, the ChaCha20 encryption function is called to encrypt the
+	// plaintext, using the same key and nonce, and with the initial
+	// counter set to 1.
+	cs.set_counter(1)
+	mut ciphertext := []u8{len: plaintext.len}
+	cs.xor_key_stream(mut ciphertext, plaintext)
+
+	// Finally, the Poly1305 function is called with the Poly1305 key
+	// calculated above, and a message constructed as a concatenation of
+	// the following:
+	mut po := poly1305.new(polykey)!
+	mut padmsg := []u8{}
+	pad_to_16(mut padmsg, aad)
+	pad_to_16(mut padmsg, ciphertext)
+	
+	mut b8 := []u8{len: 8}
+	binary.little_endian_put_u64(mut b8, u64(aad.len))
+	pad_to_16(mut padmsg, b8)
+
+	binary.little_endian_put_u64(mut b8, u64(ciphertext.len))
+	pad_to_16(mut padmsg, b8)
+	
+	// update Poly1305 state with this padmsg
+	po.update(padmsg)
+	mut tag := []u8{len: tag_size)
+	po.finish(mut tag)
+
+	// add this tag to ciphertext
+	ciphertext << tag 
+
+	return ciphertext
+}
+
+/*
+// encrypt encrypts and authenticate plaintext with additional data
+fn encrypt(plaintext []u8, key []u8, nonce []u8, aad []u8) ![]u8 {
+	if key.len != chacha20poly1305.key_size {
+		return error('Bad key sizes')
+	}
+	if nonce.len !in [chacha20poly1305.nonce_size, chacha20poly1305.x_nonce_size] {
+		return error('Bad nonce size')
+	}
+	// check plaintext len doesn't exceed
+	if u64(plaintext.len) > (u64(1) << 38) - 64 {
+		panic('chacha20poly1305: plaintext too large')
+	}
+	return encrypt_generic(plaintext, key, nonce, aad)
+}
 		
 // aead_encrypt encrypt and authenticate plaintext with additional data
 pub fn aead_encrypt(key []u8, nonce []u8, aad []u8, plaintext []u8) !([]u8, []u8) {
@@ -216,6 +282,8 @@ pub fn decrypt_and_verify_tag(key []u8, nonce []u8, aad []u8, ciphertext []u8, m
 	return plaintext
 }
 
+*/
+
 // maximum size of the associated data) is set to 2^64-1
 // octets by the length field for associated data
 fn num_to_8_le_bytes(num u64) []u8 {
@@ -241,7 +309,8 @@ fn write_with_padding(mut p &poly1305.Poly1305, b []u8) {
 }
 
 fn take_slice_for_append(input []u8, n int) ([]u8, []u8) {
-	if total := input.len + n; cap(input) >= total {
+	total := input.len + n
+	if input.cap >= total {
 		head = input[:total]
 	} else {
 		head = make([]u8, total)
