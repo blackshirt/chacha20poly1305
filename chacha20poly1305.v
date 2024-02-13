@@ -71,21 +71,27 @@ fn (c Chacha20Poly1305) overhead() int {
 	return chacha20poly1305.tag_size
 }
 
-fn (c Chacha20Poly1305) encrypt(plaintext []u8, nonce []u8, aad []u8) ![]u8 {
+// encrypt
+pub fn (c Chacha20Poly1305) encrypt(plaintext []u8, nonce []u8, aad []u8) ![]u8 {
+	// makes sure if the nonce length is matching with internal nonce size
 	if nonce.len != c.nonce_size() {
 		return error('chacha20poly1305: unmatching nonce size')
 	}
 	// check if the plaintext length doesn't exceed the amount of limit.
 	// its comes from the internal of chacha20 mechanism, where the counter are u32
-	// with the facts of 64 bytes block of chacha20 operates on, we can measure the amount
+	// with the facts of chacha20 operates on 64 bytes block, we can measure the amount
 	// of encrypted data possible in a single invocation, ie.,
 	// amount = (2^32-1)*64 = 274,877,906,880 bytes, or nearly 256 GB
 	if u64(plaintext.len) > (u64(1) << 38) - 64 {
 		panic('chacha20poly1305: plaintext too large')
 	}
+	if aad.len > max_u64 {
+		return error('chacha20poly1305: something bad in your aad')
+	}
 	return c.encrypt_generic(plaintext, nonce, aad)
 }
 
+// encrypt_generic encrypts plaintext along with nonce and additional data
 fn (c Chacha20Poly1305) encrypt_generic(plaintext []u8, nonce []u8, aad []u8) ![]u8 {
 	// First, generates a Poly1305 one-time key from the 256-bit key
 	// and given nonce. Actually its generates by performing ChaCha20 key stream function,
@@ -120,10 +126,19 @@ fn (c Chacha20Poly1305) encrypt_generic(plaintext []u8, nonce []u8, aad []u8) ![
 	return ciphertext
 }
 
+// decrypt decrypts ciphertext along with provided nonce and additional data.
+// Decryption is similar with the encryption processs with slight differences in:
+// The roles of ciphertext and plaintext are reversed, so the ChaCha20 encryption
+// function is applied to the ciphertext, producing the plaintext.
+// The Poly1305 function is still run on the AAD and the ciphertext, not the plaintext.
+// The calculated mac is bitwise compared to the received mac.
+// The message is authenticated if and only if the tags match.
 fn (c Chacha20Poly1305) decrypt(ciphertext []u8, nonce []u8, aad []u8) ![]u8 {
 	if nonce.len != c.nonce_size() {
 		return error('chacha20poly1305: unmatching nonce size')
 	}
+	// ciphertext max = plaintext max length  + tag length
+	// ie, (2^32-1)*64 + overhead = (u64(1) << 38) - 64 + 16 = 274,877,906,896 octets.
 	if u64(ciphertext.len) > (u64(1) << 38) - 48 {
 		return error('chacha20poly1305: ciphertext too large')
 	}
@@ -131,36 +146,33 @@ fn (c Chacha20Poly1305) decrypt(ciphertext []u8, nonce []u8, aad []u8) ![]u8 {
 }
 
 fn (c Chacha20Poly1305) decrypt_generic(ciphertext []u8, nonce []u8, aad []u8) ![]u8 {
+	// generates poly1305 one-time key for later calculation
 	mut polykey := []u8{len: chacha20poly1305.key_size}
 	mut s := chacha20.new_cipher(c.key, nonce)!
 	s.xor_key_stream(mut polykey, polykey)
 
-	// Next, the ChaCha20 encryption function is called to encrypt the
-	// plaintext, using the same key and nonce, and with the initial
-	// counter set to 1.
+	// Remember, ciphertext is concatenation of associated cipher output plus tag (mac) bytes
+	cipherout := ciphertext[0..ciphertext.len - c.tag_size()]
+	mac := ciphertext[ciphertext.len - c.tag_size()..]
 
-	// Remember, ciphertext = plaintext + tag (overhead) bytes
-	split_at := ciphertext.len - c.tag_size()
-	scrambled := ciphertext[0..split_at]
-	mac := ciphertext[split_at..]
-
-	mut plaintext := []u8{len: scrambled.len}
+	mut plaintext := []u8{len: cipherout.len}
 	s.set_counter(1)
-	s.xor_key_stream(mut plaintext, scrambled)
+	// doing reverse encrypt on cipher output part produces plaintext
+	s.xor_key_stream(mut plaintext, cipherout)
 
+	// authenticated messages part
 	mut constructed_msg := []u8{}
-	poly1305_construct_msg(mut constructed_msg, aad, plaintext)
+	poly1305_construct_msg(mut constructed_msg, aad, cipherout)
 
-	// Lets creates Poly1305 instance with one-time key generates in above step,
-	// updates Poly1305 state with this constructed_msg and finally generates tag.
 	mut tag := []u8{len: chacha20poly1305.tag_size}
 	mut po := poly1305.new(polykey)!
 	po.update(constructed_msg)
 	po.finish(mut tag)
 
-	// Let's verify the authenticated tag
-	if !poly1305.verify_tag(tag, scrambled, polykey) {
-		return error('chacha20poly1305: authenticated tag is not match, ${mac} vs ${tag}')
+	// lets verify if received mac is matching with calculated tag,
+	// return error on fail
+	if subtle.constant_time_compare(mac, tag) != 1 {
+		return error('chacha20poly1305: unmatching tag')
 	}
 
 	return plaintext
