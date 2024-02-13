@@ -27,11 +27,11 @@ pub interface AEAD {
 	// overhead returns the maximum difference between the lengths of a plaintext and its ciphertext.
 	overhead() int
 	// encrypt encrypts and authenticates the provided plaintext along with a nonce, and associated data.
-	// It returns the ciphertext and appends the result into the dst.
+	// It returns the bytes contains ciphertext and authenticated tag.
 	// The nonce must be `nonce_size()` bytes long and required to be unique for all time, for a given key
 	encrypt(plaintext []u8, nonce []u8, aad []u8) ![]u8
 	// decrypt decrypts and authenticates (verifies) the provided ciphertext along with a nonce, and
-	// associated data. If successful,  it returns the plaintext and appends the resulting plaintext to dst.
+	// associated data. If verified successfully, it returns the plaintext and error otherwise.
 	decrypt(ciphertext []u8, nonce []u8, aad []u8) ![]u8
 }
 
@@ -40,13 +40,14 @@ const nonce_size = 12
 const x_nonce_size = 24
 const tag_size = 16
 
+// Chacha20Poly1305 represents AEAD algorithm backed by `x.crypto.chacha20` and `x.crypto.poly1305`.
 struct Chacha20Poly1305 {
 	key    []u8 = []u8{len: chacha20poly1305.key_size}
 	ncsize int  = chacha20poly1305.nonce_size
 }
 
 // new creates a new Chacha20Poly1305 AEAD instance with given 32 bytes of key
-// and the nonce length in 12 or 24 length, otherwise it would return error.
+// and the nonce length in ncsize. The ncsize should 12 or 24 length, otherwise it would return error.
 pub fn new(key []u8, ncsize int) !&AEAD {
 	if key.len != chacha20poly1305.key_size {
 		return error('chacha20poly1305: bad key size')
@@ -61,19 +62,24 @@ pub fn new(key []u8, ncsize int) !&AEAD {
 	return c
 }
 
+// nonce_size returns the size of underlying nonce (in bytes) of AEAD algorithm.
 pub fn (c Chacha20Poly1305) nonce_size() int {
 	return c.ncsize
 }
 
+// tag_size returns the size of mac (tag), in bytes, produced by Chacha20Poly1305 AEAD.
 pub fn (c Chacha20Poly1305) tag_size() int {
 	return chacha20poly1305.tag_size
 }
 
+// overhead returns maximum difference between the lengths of a plaintext to be encrypted and 
+// ciphertext's output. In the context of Chacha20Poly1305, `.overhead() == .tag_size()`.
 pub fn (c Chacha20Poly1305) overhead() int {
 	return chacha20poly1305.tag_size
 }
 
-// encrypt
+// encrypt encrypts plaintext, along with nonce and additional data and generates 
+// authenticated tag appended into ciphertext's output.
 pub fn (c Chacha20Poly1305) encrypt(plaintext []u8, nonce []u8, aad []u8) ![]u8 {
 	// makes sure if the nonce length is matching with internal nonce size
 	if nonce.len != c.nonce_size() {
@@ -134,7 +140,7 @@ fn (c Chacha20Poly1305) encrypt_generic(plaintext []u8, nonce []u8, aad []u8) ![
 // function is applied to the ciphertext, producing the plaintext.
 // The Poly1305 function is still run on the AAD and the ciphertext, not the plaintext.
 // The calculated mac is bitwise compared to the received mac.
-// The message is authenticated if and only if the tags match.
+// The message is authenticated if and only if the tags match, return error if failed to verify.
 pub fn (c Chacha20Poly1305) decrypt(ciphertext []u8, nonce []u8, aad []u8) ![]u8 {
 	if nonce.len != c.nonce_size() {
 		return error('chacha20poly1305: unmatching nonce size')
