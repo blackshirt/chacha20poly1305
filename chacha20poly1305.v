@@ -47,7 +47,7 @@ struct Chacha20Poly1305 {
 }
 
 // new creates a new Chacha20Poly1305 AEAD instance with given 32 bytes of key
-// and the nonce length in ncsize. The ncsize should 12 or 24 length, otherwise it would return error.
+// and the nonce size in ncsize. The ncsize should be 12 or 24 length, otherwise it would return error.
 pub fn new(key []u8, ncsize int) !&AEAD {
 	if key.len != chacha20poly1305.key_size {
 		return error('chacha20poly1305: bad key size')
@@ -178,9 +178,9 @@ fn (c Chacha20Poly1305) decrypt_generic(ciphertext []u8, nonce []u8, aad []u8) !
 	po.finish(mut tag)
 
 	// lets verify if received mac is matching with calculated tag,
-	// return error on fail
+	// return error on fail and free allocated resource.
 	if subtle.constant_time_compare(mac, tag) != 1 {
-		// freeing allocated resource
+		// free allocated resource
 		unsafe {
 			s.free()
 			tag.free()
