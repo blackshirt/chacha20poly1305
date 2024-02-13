@@ -5,7 +5,7 @@
 // AEAD_CHACHA20_POLY1305 is an authenticated encryption with additional
 //  data algorithm.  The inputs to AEAD_CHACHA20_POLY1305 are:
 //   A 256-bit key
-//   A 96-bit nonce -- different for each invocation with the same key
+//   A 96-bit nonce (or bigger 192 bit nonce) -- different for each invocation with the same key
 //   An arbitrary length plaintext
 //   Arbitrary length additional authenticated data (AAD)
 module chacha20poly1305
@@ -18,7 +18,7 @@ import x.crypto.poly1305
 // This interface was a proposed draft of `AEAD` interfaces likes discussion at discord channel.
 // see https://discord.com/channels/592103645835821068/592320321995014154/1206029352412778577
 // Authenticated Encryption with Additional Data (AEAD) interface
-interface AEAD {
+pub interface AEAD {
 	// nonce_size return the nonce size (in bytes) used by this AEAD algorithm that should be
 	// passed to `.encrypt` or `.decrypt`.
 	nonce_size() int
@@ -45,7 +45,9 @@ struct Chacha20Poly1305 {
 	ncsize int  = chacha20poly1305.nonce_size
 }
 
-fn new(key []u8, ncsize int) !&AEAD {
+// new creates a new Chacha20Poly1305 AEAD instance with given 32 bytes of key
+// and the nonce length in 12 or 24 length, otherwise it would return error.
+pub fn new(key []u8, ncsize int) !&AEAD {
 	if key.len != chacha20poly1305.key_size {
 		return error('chacha20poly1305: bad key size')
 	}
@@ -59,15 +61,15 @@ fn new(key []u8, ncsize int) !&AEAD {
 	return c
 }
 
-fn (c Chacha20Poly1305) nonce_size() int {
+pub fn (c Chacha20Poly1305) nonce_size() int {
 	return c.ncsize
 }
 
-fn (c Chacha20Poly1305) tag_size() int {
+pub fn (c Chacha20Poly1305) tag_size() int {
 	return chacha20poly1305.tag_size
 }
 
-fn (c Chacha20Poly1305) overhead() int {
+pub fn (c Chacha20Poly1305) overhead() int {
 	return chacha20poly1305.tag_size
 }
 
@@ -133,7 +135,7 @@ fn (c Chacha20Poly1305) encrypt_generic(plaintext []u8, nonce []u8, aad []u8) ![
 // The Poly1305 function is still run on the AAD and the ciphertext, not the plaintext.
 // The calculated mac is bitwise compared to the received mac.
 // The message is authenticated if and only if the tags match.
-fn (c Chacha20Poly1305) decrypt(ciphertext []u8, nonce []u8, aad []u8) ![]u8 {
+pub fn (c Chacha20Poly1305) decrypt(ciphertext []u8, nonce []u8, aad []u8) ![]u8 {
 	if nonce.len != c.nonce_size() {
 		return error('chacha20poly1305: unmatching nonce size')
 	}
@@ -178,18 +180,10 @@ fn (c Chacha20Poly1305) decrypt_generic(ciphertext []u8, nonce []u8, aad []u8) !
 	return plaintext
 }
 
-fn pad_to_16(mut out []u8, b []u8) {
-	if b.len % 16 == 0 {
-		out << b
-		return
-	}
-	pad := []u8{len: 16 - b.len % 16}
-	out << b
-	out << pad
-}
+// Helper function
 
-// pad to 16 u8 block
-fn pad16(x []u8) []u8 {
+// pad x to 16 bytes block
+fn pad_to_16(x []u8) []u8 {
 	mut buf := x.clone()
 	if buf.len % 16 == 0 {
 		return buf
@@ -199,7 +193,7 @@ fn pad16(x []u8) []u8 {
 	return buf
 }
 
-// poly1305_construct_msg constructs message for poly1305 function.
+// poly1305_construct_msg constructs poly1305 message for later usage and stores to out.
 // The message constructed as a concatenation of the following:
 // 	*  padded to multiple of 16 bytes block of the additional data bytes
 // 	*  padded to multiple of 16 bytes block of the ciphertext (or plaintext) bytes
@@ -207,8 +201,8 @@ fn pad16(x []u8) []u8 {
 // 	*  The length of the ciphertext (or plaintext) in octets (as a 64-bit little-endian integer).
 fn poly1305_construct_msg(mut out []u8, aad []u8, bytes []u8) {
 	mut b8 := []u8{len: 8}
-	out << pad16(aad)
-	out << pad16(bytes)
+	out << pad_to_16(aad)
+	out << pad_to_16(bytes)
 	binary.little_endian_put_u64(mut b8, u64(aad.len))
 	out << b8
 	binary.little_endian_put_u64(mut b8, u64(bytes.len))
