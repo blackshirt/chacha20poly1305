@@ -162,8 +162,8 @@ fn (c Chacha20Poly1305) decrypt_generic(ciphertext []u8, nonce []u8, aad []u8) !
 	split_at := ciphertext.len - c.tag_size()
 	scrambled := ciphertext[0..split_at]
 	mac := ciphertext[split_at..]
-	mut ciphertext := []u8{len: plaintext.len}
-	cs.xor_key_stream(mut ciphertext, plaintext)
+	mut plaintext := []u8{len: scrambled.len}
+	cs.xor_key_stream(mut plaintext, scrambled)
 
 	// Finally, the Poly1305 function is called with the Poly1305 key
 	// calculated above, and a message constructed as a concatenation of
@@ -171,13 +171,13 @@ fn (c Chacha20Poly1305) decrypt_generic(ciphertext []u8, nonce []u8, aad []u8) !
 	mut po := poly1305.new(polykey)!
 	mut padmsg := []u8{}
 	pad_to_16(mut padmsg, aad)
-	pad_to_16(mut padmsg, ciphertext)
+	pad_to_16(mut padmsg, scrambled)
 	
 	mut b8 := []u8{len: 8}
 	binary.little_endian_put_u64(mut b8, u64(aad.len))
 	pad_to_16(mut padmsg, b8)
 
-	binary.little_endian_put_u64(mut b8, u64(ciphertext.len))
+	binary.little_endian_put_u64(mut b8, u64(scrambled.len))
 	pad_to_16(mut padmsg, b8)
 	
 	// update Poly1305 state with this padmsg
@@ -185,10 +185,12 @@ fn (c Chacha20Poly1305) decrypt_generic(ciphertext []u8, nonce []u8, aad []u8) !
 	mut tag := []u8{len: tag_size)
 	po.finish(mut tag)
 
-	// add this tag to ciphertext
-	ciphertext << tag 
+	// Let's verify the authenticated tag
+	if !poly1305.verify_tag(mac, c.key, plaintext) {
+		return error("chacha20poly1305: authenticated tag is not match")
+	}
 
-	return ciphertext
+	return plaintext
 }
 
 /*
