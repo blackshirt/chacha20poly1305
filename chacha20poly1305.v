@@ -174,6 +174,13 @@ fn (c Chacha20Poly1305) decrypt_generic(ciphertext []u8, nonce []u8, aad []u8) !
 	// lets verify if received mac is matching with calculated tag,
 	// return error on fail
 	if subtle.constant_time_compare(mac, tag) != 1 {
+		// freeing allocated resource
+		unsafe {
+			s.free()
+			tag.free()
+			polykey.free()
+			plaintext.free()
+		}
 		return error('chacha20poly1305: unmatching tag')
 	}
 
