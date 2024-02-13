@@ -88,39 +88,33 @@ fn (c Chacha20Poly1305) encrypt(plaintext []u8, nonce []u8, aad []u8) ![]u8 {
 
 fn (c Chacha20Poly1305) encrypt_generic(plaintext []u8, nonce []u8, aad []u8) ![]u8 {
 	// First, generates a Poly1305 one-time key from the 256-bit key
-    // and nonce. Actually its generates by performing ChaCha20 key stream function,
-	// and take
+	// and given nonce. Actually its generates by performing ChaCha20 key stream function,
+	// and take the first 32 bytes as a one-time key for Poly1305 from 64 bytes results.
 	// see https://datatracker.ietf.org/doc/html/rfc8439#section-2.6
 	mut polykey := []u8{len: chacha20poly1305.key_size}
-	mut ciphertext := []u8{len: plaintext.len}
 	mut s := chacha20.new_cipher(c.key, nonce)!
 	s.xor_key_stream(mut polykey, polykey)
 
-	// Next, the ChaCha20 encryption function is called to encrypt the
-	// plaintext, using the same key and nonce, and with the initial
-	// counter set to 1.
+	// Next, the ChaCha20 encryption function is called to encrypt the plaintext,
+	// using the same key and nonce, and with the initial ChaCha20 counter set to 1.
+	mut ciphertext := []u8{len: plaintext.len}
 	s.set_counter(1)
 	s.xor_key_stream(mut ciphertext, plaintext)
 
 	// Finally, the Poly1305 function is called with the Poly1305 key
-	// calculated above, and a message constructed as a concatenation of
-	// the following:
-	mut b8 := []u8{len: 8}
-	mut pad_msg := []u8{}
-	pad_msg << pad16(aad)
-	pad_msg << pad16(ciphertext)
-	binary.little_endian_put_u64(mut b8, u64(aad.len))
-	pad_msg << b8
-	binary.little_endian_put_u64(mut b8, u64(ciphertext.len))
-	pad_msg << b8
+	// calculated above, and a message constructed as descibed in
+	// https://datatracker.ietf.org/doc/html/rfc8439#section-2.8
+	mut constructed_msg := []u8{}
+	poly1305_construct_msg(mut constructed_msg, aad, ciphertext)
 
-	// update Poly1305 state with this padmsg
-	mut po := poly1305.new(polykey)!
-	po.update(pad_msg)
+	// Lets creates Poly1305 instance with one-time key generates in above step,
+	// updates Poly1305 state with this constructed_msg and finally generates tag.
 	mut tag := []u8{len: chacha20poly1305.tag_size}
+	mut po := poly1305.new(polykey)!
+	po.update(constructed_msg)
 	po.finish(mut tag)
 
-	// add this tag to ciphertext
+	// add this tag to ciphertext output
 	ciphertext << tag
 
 	return ciphertext
@@ -137,46 +131,35 @@ fn (c Chacha20Poly1305) decrypt(ciphertext []u8, nonce []u8, aad []u8) ![]u8 {
 }
 
 fn (c Chacha20Poly1305) decrypt_generic(ciphertext []u8, nonce []u8, aad []u8) ![]u8 {
-	mut cs := chacha20.new_cipher(c.key, nonce)!
-
-	// and then performing Chacha20 block function
 	mut polykey := []u8{len: chacha20poly1305.key_size}
-	cs.xor_key_stream(mut polykey, polykey)
+	mut s := chacha20.new_cipher(c.key, nonce)!
+	s.xor_key_stream(mut polykey, polykey)
 
 	// Next, the ChaCha20 encryption function is called to encrypt the
 	// plaintext, using the same key and nonce, and with the initial
 	// counter set to 1.
-	cs.set_counter(1)
 
 	// Remember, ciphertext = plaintext + tag (overhead) bytes
 	split_at := ciphertext.len - c.tag_size()
 	scrambled := ciphertext[0..split_at]
 	mac := ciphertext[split_at..]
+
 	mut plaintext := []u8{len: scrambled.len}
-	cs.xor_key_stream(mut plaintext, scrambled)
+	s.set_counter(1)
+	s.xor_key_stream(mut plaintext, scrambled)
 
-	// Finally, the Poly1305 function is called with the Poly1305 key
-	// calculated above, and a message constructed as a concatenation of
-	// the following:
-	mut po := poly1305.new(polykey)!
-	mut padmsg := []u8{}
-	pad_to_16(mut padmsg, aad)
-	pad_to_16(mut padmsg, scrambled)
+	mut constructed_msg := []u8{}
+	poly1305_construct_msg(mut constructed_msg, aad, plaintext)
 
-	mut b8 := []u8{len: 8}
-	binary.little_endian_put_u64(mut b8, u64(aad.len))
-	pad_to_16(mut padmsg, b8)
-
-	binary.little_endian_put_u64(mut b8, u64(scrambled.len))
-	pad_to_16(mut padmsg, b8)
-
-	// update Poly1305 state with this padmsg
-	po.update(padmsg)
+	// Lets creates Poly1305 instance with one-time key generates in above step,
+	// updates Poly1305 state with this constructed_msg and finally generates tag.
 	mut tag := []u8{len: chacha20poly1305.tag_size}
+	mut po := poly1305.new(polykey)!
+	po.update(constructed_msg)
 	po.finish(mut tag)
 
 	// Let's verify the authenticated tag
-	if !poly1305.verify_tag(tag, polykey, plaintext) {
+	if !poly1305.verify_tag(tag, scrambled, polykey) {
 		return error('chacha20poly1305: authenticated tag is not match, ${mac} vs ${tag}')
 	}
 
@@ -204,15 +187,18 @@ fn pad16(x []u8) []u8 {
 	return buf
 }
 
-fn construct_mac_data(aad []u8, text []u8) []u8 {
+// poly1305_construct_msg constructs message for poly1305 function.
+// The message constructed as a concatenation of the following:
+// 	*  padded to multiple of 16 bytes block of the additional data bytes
+// 	*  padded to multiple of 16 bytes block of the ciphertext (or plaintext) bytes
+// 	*  The length of the additional data in octets (as a 64-bit little-endian integer).
+// 	*  The length of the ciphertext (or plaintext) in octets (as a 64-bit little-endian integer).
+fn poly1305_construct_msg(mut out []u8, aad []u8, bytes []u8) {
 	mut b8 := []u8{len: 8}
-	mut out := []u8{}
 	out << pad16(aad)
-	out << pad16(text)
+	out << pad16(bytes)
 	binary.little_endian_put_u64(mut b8, u64(aad.len))
 	out << b8
-	binary.little_endian_put_u64(mut b8, u64(text.len))
+	binary.little_endian_put_u64(mut b8, u64(bytes.len))
 	out << b8
-
-	return out
 }
