@@ -2,8 +2,8 @@
 // Use of this source code is governed by an MIT license
 // that can be found in the LICENSE file.
 //
-// AEAD_CHACHA20_POLY1305 is an authenticated encryption with additional
-//  data algorithm.  The inputs to AEAD_CHACHA20_POLY1305 are:
+// AEAD_CHACHA20_POLY1305 is an authenticated encryption with additional data algorithm.  
+// The inputs to AEAD_CHACHA20_POLY1305 are:
 //   A 256-bit key
 //   A 96-bit nonce (or bigger 192 bit nonce) -- different for each invocation with the same key
 //   An arbitrary length plaintext
@@ -39,6 +39,23 @@ const key_size = 32
 const nonce_size = 12
 const x_nonce_size = 24
 const tag_size = 16
+
+// encrypt does one-shot encryption of given plaintext with associated key, nonce and additional data.
+// It return ciphertext output and authenticated tag appended into it.
+pub fn encrypt(plaintext []u8, key []u8, nonce []u8, aad []u8) ![]u8 {
+	mut c := new(key, nonce.len)!
+	out := c.encrypt(plaintext, nonce, aad)!
+	return out 
+}
+
+// decrypt does one-shot decryption of given ciphertext with associated key, nonce and additional data.
+// It return plaintext output and verify if resulting tag is a valid message authenticated code (mac)
+// for given message, key and additional data.
+pub fn decrypt(ciphertext []u8, key []u8, nonce []u8, aad []u8) ![]u8 {
+	mut c := new(key, nonce.len)!
+	out := c.decrypt(ciphertext, nonce, aad)!
+	return out 
+}
 
 // Chacha20Poly1305 represents AEAD algorithm backed by `x.crypto.chacha20` and `x.crypto.poly1305`.
 struct Chacha20Poly1305 {
